@@ -5,15 +5,29 @@ Voice Pipeline: Whisper → Claude → XTTS v2
 Experimental voice-to-voice pipeline with custom voice cloning.
 
 Usage:
-    python voice_pipeline.py --input audio.wav --voice samples/my_voice.wav
-    python voice_pipeline.py --record --voice samples/my_voice.wav
+    python voice_pipeline.py --input audio.wav
+    python voice_pipeline.py --record
+    python voice_pipeline.py --text "Salut!"
 """
 
 import argparse
+import json
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+# Load config
+CONFIG_PATH = Path(__file__).parent / "config.json"
+
+def load_config() -> dict:
+    if not CONFIG_PATH.exists():
+        print(f"❌ Config not found: {CONFIG_PATH}")
+        sys.exit(1)
+    with open(CONFIG_PATH) as f:
+        return json.load(f)
+
+CONFIG = load_config()
 
 # Check dependencies
 def check_deps():
@@ -49,35 +63,38 @@ import anthropic
 import soundfile as sf
 import numpy as np
 
-# Configuration
-WHISPER_MODEL = "base"  # tiny, base, small, medium, large
-CLAUDE_MODEL = "claude-haiku-4-5"
-XTTS_MODEL = "tts_models/multilingual/multi-dataset/xtts_v2"
-LANGUAGE = "fr"
 
 class VoicePipeline:
-    def __init__(self, voice_sample: str, device: str = None):
+    def __init__(self, voice_sample: str = None, device: str = None):
         """Initialize the voice pipeline.
         
         Args:
-            voice_sample: Path to the voice sample WAV file (6-30 seconds)
+            voice_sample: Path to voice sample WAV (6-30 sec). Uses config default if None.
             device: 'cuda' or 'cpu' (auto-detect if None)
         """
+        self.config = CONFIG
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.voice_sample = voice_sample
+        
+        # Voice sample: argument > config
+        if voice_sample:
+            self.voice_sample = voice_sample
+        else:
+            self.voice_sample = str(Path(__file__).parent / self.config["tts"]["voice_sample"])
         
         print(f"🔧 Device: {self.device}")
-        print(f"🎤 Voice sample: {voice_sample}")
+        print(f"🎤 Voice sample: {self.voice_sample}")
         
         # Validate voice sample
-        if not os.path.exists(voice_sample):
-            raise FileNotFoundError(f"Voice sample not found: {voice_sample}")
+        if not os.path.exists(self.voice_sample):
+            raise FileNotFoundError(f"Voice sample not found: {self.voice_sample}")
         
         print("📥 Loading Whisper model...")
-        self.whisper_model = whisper.load_model(WHISPER_MODEL, device=self.device)
+        whisper_model = self.config["whisper"]["model"]
+        self.whisper_model = whisper.load_model(whisper_model, device=self.device)
         
         print("📥 Loading XTTS v2 model...")
-        self.tts = TTS(XTTS_MODEL).to(self.device)
+        tts_model = self.config["tts"]["model"]
+        self.tts = TTS(tts_model).to(self.device)
         
         print("📥 Initializing Claude client...")
         self.claude = anthropic.Anthropic()
@@ -87,7 +104,8 @@ class VoicePipeline:
     def transcribe(self, audio_path: str) -> str:
         """Transcribe audio to text using Whisper."""
         print("🎧 Transcribing audio...")
-        result = self.whisper_model.transcribe(audio_path, language=LANGUAGE)
+        language = self.config["whisper"]["language"]
+        result = self.whisper_model.transcribe(audio_path, language=language)
         text = result["text"].strip()
         print(f"📝 Transcription: {text}")
         return text
@@ -96,15 +114,13 @@ class VoicePipeline:
         """Generate a response using Claude."""
         print("🧠 Generating response with Claude...")
         
-        if system_prompt is None:
-            system_prompt = """Tu es Morwintar, un assistant IA avec de la personnalité.
-Réponds de manière concise et naturelle en français.
-Garde tes réponses courtes (1-3 phrases) pour que la synthèse vocale soit rapide."""
+        claude_config = self.config["claude"]
+        prompt = system_prompt or claude_config["system_prompt"]
         
         message = self.claude.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=256,
-            system=system_prompt,
+            model=claude_config["model"],
+            max_tokens=claude_config["max_tokens"],
+            system=prompt,
             messages=[{"role": "user", "content": text}]
         )
         
@@ -116,10 +132,13 @@ Garde tes réponses courtes (1-3 phrases) pour que la synthèse vocale soit rapi
         """Synthesize text to speech using XTTS v2 with voice cloning."""
         print("🔊 Synthesizing speech...")
         
+        tts_config = self.config["tts"]
+        language = tts_config["language"]
+        
         self.tts.tts_to_file(
             text=text,
             speaker_wav=self.voice_sample,
-            language=LANGUAGE,
+            language=language,
             file_path=output_path
         )
         
@@ -199,7 +218,7 @@ def main():
     parser = argparse.ArgumentParser(description="Voice Pipeline: Whisper → Claude → XTTS v2")
     parser.add_argument("--input", "-i", help="Input audio file")
     parser.add_argument("--text", "-t", help="Input text (skip Whisper)")
-    parser.add_argument("--voice", "-v", required=True, help="Voice sample WAV file (6-30 sec)")
+    parser.add_argument("--voice", "-v", help="Voice sample WAV file (default: from config)")
     parser.add_argument("--output", "-o", help="Output audio file")
     parser.add_argument("--record", "-r", action="store_true", help="Record from microphone")
     parser.add_argument("--duration", "-d", type=float, default=5.0, help="Recording duration (seconds)")

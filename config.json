@@ -1,18 +1,28 @@
 {
-  "model": "tts_models/multilingual/multi-dataset/xtts_v2",
-  "language": "fr",
-  "voice_sample": "samples/morlutin_voice.wav",
-  "parameters": {
-    "temperature": 0.5,
-    "length_penalty": 1.0,
-    "repetition_penalty": 2.0,
-    "top_k": 50,
-    "top_p": 0.8,
-    "speed": 1.0
+  "whisper": {
+    "model": "base",
+    "language": "fr"
+  },
+  "claude": {
+    "model": "claude-haiku-4-5",
+    "max_tokens": 256,
+    "system_prompt": "Tu es Morwintar, un assistant IA avec de la personnalité. Réponds de manière concise et naturelle en français. Garde tes réponses courtes (1-3 phrases) pour que la synthèse vocale soit rapide."
+  },
+  "tts": {
+    "model": "tts_models/multilingual/multi-dataset/xtts_v2",
+    "language": "fr",
+    "voice_sample": "samples/sample.wav",
+    "parameters": {
+      "temperature": 0.5,
+      "length_penalty": 1.0,
+      "repetition_penalty": 2.0,
+      "top_k": 50,
+      "top_p": 0.8,
+      "speed": 1.0
+    }
   },
   "processing": {
     "split_sentences": true,
     "pause_between_sentences_sec": 0.3
-  },
-  "notes": "Settings optimaux pour voix JARVIS naturelle - validé 2026-02-13"
+  }
 }
