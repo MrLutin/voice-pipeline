@@ -20,7 +20,7 @@ sentences = [
     "À votre service, Monsieur Lutin."
 ]
 
-voice_sample = "samples/morlutin_voice.wav"
+voice_sample = "samples/sample.wav"
 output_file = "output/presentation_smooth.wav"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
